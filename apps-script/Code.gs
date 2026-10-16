@@ -41,10 +41,15 @@ const CONFIG = {
 };
 
 // URL patterns that identify live-tracking links. Verify with real emails (see PLAN.md).
-// Optional nameRe pulls the rider's name out of the email body (first capture group),
-// for providers that send from a no-reply address.
+// Optional nameRe pulls the rider's name out of the subject + plain body (first capture
+// group), for providers that send from a no-reply address.
 const PROVIDERS = [
-  { name: 'Garmin LiveTrack', re: /https?:\/\/livetrack\.garmin\.com\/[^\s"'<>)]+/i },
+  // Verified from a real email. Subject: "Watch Paulina Simons's LiveTrack" (HTML-only body).
+  {
+    name: 'Garmin LiveTrack',
+    re: /https?:\/\/livetrack\.garmin\.com\/session\/[^\s"'<>)]+/i,
+    nameRe: /Watch (.+?)['’]s? LiveTrack/i,
+  },
   { name: 'Garmin MapShare', re: /https?:\/\/share\.garmin\.com\/[^\s"'<>)]+/i },
   { name: 'Strava Beacon', re: /https?:\/\/(?:www\.)?strava\.com\/beacon\/[^\s"'<>)]+/i },
   // Verified from a real email: "Dustin S is starting an activity and you can track their progress:"
@@ -148,7 +153,7 @@ function processMessage_(msg, sheet, roster) {
 
   const text = plain + '\n' + html;
   let link = findLink_(text);
-  const namedInEmail = link && link.nameRe ? (plain.match(link.nameRe) || [])[1] : '';
+  const namedInEmail = link && link.nameRe ? ((subject + '\n' + plain).match(link.nameRe) || [])[1] : '';
   const rider = findRider_(haystack, roster, namedInEmail);
   if (!link && CONFIG.FALLBACK_ANY_LINK_FROM_ROSTER && rider.inRoster) {
     const m = text.match(/https?:\/\/[^\s"'<>)]+/i);

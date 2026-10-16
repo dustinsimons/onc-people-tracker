@@ -176,7 +176,7 @@ Link formats differ by brand. `Code.gs` has a `PROVIDERS` list of URL patterns:
 
 | Provider | Pattern in script | Confidence |
 |---|---|---|
-| Garmin LiveTrack | `livetrack.garmin.com/...` | High |
+| Garmin LiveTrack | `livetrack.garmin.com/session/...`, rider name from subject "Watch <Name>'s LiveTrack" | High. Verified from a real email. |
 | Garmin inReach MapShare | `share.garmin.com/...` | High |
 | Strava Beacon | `strava.com/beacon/...` | Medium. Verify. |
 | Wahoo | `wahooligan.com/users/live/...` | High. Verified from a real email. |
