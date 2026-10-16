@@ -17,8 +17,27 @@ const CONFIG = {
   RETENTION_DAYS: 7,
   // Minutes between Gmail checks (1, 5, 10, 15 or 30).
   TRIGGER_MINUTES: 1,
-  // If true, any link in an email from a rider listed in Roster counts as a tracking link.
+  // If true, any link in an email from a rider on the roster counts as a tracking link.
   FALLBACK_ANY_LINK_FROM_ROSTER: false,
+
+  // --- Existing team roster -------------------------------------------------
+  // Blank = the roster lives in the spreadsheet this script is bound to.
+  // Otherwise paste the roster spreadsheet's ID (the long part of its URL).
+  ROSTER_SPREADSHEET_ID: '',
+  // Tab holding the roster. Blank = the first tab that isn't the Rides tab.
+  ROSTER_TAB: '',
+  // Header names (row 1, case-insensitive) the script looks for. Add your own if they differ.
+  // Only a name (or first + last) is required; the rest improve matching.
+  ROSTER_COLUMNS: {
+    name: ['name', 'full name', 'rider', 'member'],
+    first: ['first name', 'first'],
+    last: ['last name', 'last', 'surname'],
+    display: ['nickname', 'display name', 'preferred name'],
+    email: ['email', 'e-mail', 'email address'],
+    phone: ['phone', 'mobile', 'cell', 'phone number', 'cell phone'],
+    // Optional column you can add: the name exactly as the GPS app writes it, if different.
+    tracking: ['tracking name', 'garmin name', 'livetrack name'],
+  },
 };
 
 // URL patterns that identify live-tracking links. Verify with real emails (see PLAN.md).
@@ -34,7 +53,6 @@ const PROVIDERS = [
 const END_PATTERNS = [/livetrack (?:has )?ended/i, /activity (?:has )?ended/i, /beacon (?:has )?ended/i];
 
 const RIDES_SHEET = 'Rides';
-const ROSTER_SHEET = 'Roster';
 const RIDE_HEADERS = ['Received', 'Rider', 'Provider', 'Link', 'Source', 'MessageId', 'EndedAt'];
 const COL = { RECEIVED: 0, RIDER: 1, PROVIDER: 2, LINK: 3, SOURCE: 4, MESSAGE_ID: 5, ENDED_AT: 6 };
 const SEEN_KEY = 'SEEN_MESSAGE_IDS';
@@ -47,12 +65,9 @@ const MAX_SEEN = 500;
 /** Run once from the Apps Script editor. */
 function setup() {
   const ss = getSpreadsheet_();
-  ss.getSheetByName(RIDES_SHEET) || ss.insertSheet(RIDES_SHEET).appendRow(RIDE_HEADERS);
-  if (!ss.getSheetByName(ROSTER_SHEET)) {
-    const roster = ss.insertSheet(ROSTER_SHEET);
-    roster.appendRow(['Match text (name / email / phone as it appears in the message)', 'Display name']);
-    roster.appendRow(['Jane Doe', 'Jane']);
-  }
+  // Adds one "Rides" tab at the end; the roster tab itself is only read, never changed.
+  ss.getSheetByName(RIDES_SHEET) ||
+    ss.insertSheet(RIDES_SHEET, ss.getSheets().length).appendRow(RIDE_HEADERS);
 
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('ACCESS_KEY')) {
@@ -65,7 +80,24 @@ function setup() {
     .forEach((t) => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('checkMail').timeBased().everyMinutes(CONFIG.TRIGGER_MINUTES).create();
 
+  checkRoster();
   Logger.log('Setup done. ACCESS_KEY = ' + props.getProperty('ACCESS_KEY'));
+}
+
+/** Logs which roster columns were found and the first few riders. Safe to run any time. */
+function checkRoster() {
+  const sheet = getRosterSheet_();
+  if (!sheet) throw new Error('Roster tab not found. Check ROSTER_SPREADSHEET_ID / ROSTER_TAB.');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  const col = findRosterColumns_(headers);
+  const found = Object.keys(col).filter((k) => col[k] !== -1).map((k) => `${k} → "${headers[col[k]]}"`);
+  Logger.log(`Roster tab "${sheet.getName()}". Columns used: ${found.join(', ') || 'NONE'}`);
+  if (col.name === -1 && col.first === -1) {
+    throw new Error('No name column found in roster row 1. Add your header to CONFIG.ROSTER_COLUMNS.name.');
+  }
+  const roster = loadRoster_();
+  Logger.log(`${roster.length} riders loaded. First few: ` +
+    roster.slice(0, 5).map((r) => `${r.name} [${r.matches.join(' | ')}]`).join('; '));
 }
 
 // ---------------------------------------------------------------------------
@@ -136,24 +168,54 @@ function findLink_(text, fromRosterRider) {
   return null;
 }
 
+function getRosterSheet_() {
+  const ss = CONFIG.ROSTER_SPREADSHEET_ID
+    ? SpreadsheetApp.openById(CONFIG.ROSTER_SPREADSHEET_ID)
+    : getSpreadsheet_();
+  return CONFIG.ROSTER_TAB
+    ? ss.getSheetByName(CONFIG.ROSTER_TAB)
+    : ss.getSheets().find((s) => s.getName() !== RIDES_SHEET);
+}
+
+/** Maps each CONFIG.ROSTER_COLUMNS key to a column index in the header row (-1 if absent). */
+function findRosterColumns_(headers) {
+  const norm = headers.map((h) => String(h).trim().toLowerCase());
+  const col = {};
+  Object.keys(CONFIG.ROSTER_COLUMNS).forEach((k) => {
+    col[k] = norm.findIndex((h) => CONFIG.ROSTER_COLUMNS[k].includes(h));
+  });
+  return col;
+}
+
+/** Reads the existing team roster into [{ name, matches: [text identifying the rider] }]. */
 function loadRoster_() {
-  const sheet = getSpreadsheet_().getSheetByName(ROSTER_SHEET);
+  const sheet = getRosterSheet_();
   if (!sheet || sheet.getLastRow() < 2) return [];
-  return sheet
-    .getRange(2, 1, sheet.getLastRow() - 1, 2)
-    .getValues()
-    .filter((r) => String(r[0]).trim())
-    .map((r) => ({ match: String(r[0]).trim(), name: String(r[1]).trim() || String(r[0]).trim() }));
+  const [headers, ...rows] = sheet.getDataRange().getDisplayValues();
+  const col = findRosterColumns_(headers);
+  const get = (r, k) => (col[k] === -1 ? '' : String(r[col[k]]).trim());
+  // Cells may hold several values, e.g. "jane@x.com, jane.doe@work.com".
+  const list = (r, k) => get(r, k).split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
+
+  return rows
+    .map((r) => {
+      const full = get(r, 'name') || [get(r, 'first'), get(r, 'last')].filter(Boolean).join(' ');
+      const matches = [...list(r, 'tracking'), full, ...list(r, 'email'), ...list(r, 'phone')].filter(Boolean);
+      return { name: get(r, 'display') || full || matches[0], matches };
+    })
+    .filter((p) => p.matches.length);
 }
 
 function findRider_(haystack, roster) {
   const lower = haystack.toLowerCase();
   const digits = haystack.replace(/\D/g, '');
   for (const r of roster) {
-    const matchDigits = r.match.replace(/\D/g, '');
-    const isPhone = matchDigits.length >= 7 && !/[a-z@]/i.test(r.match);
-    if (isPhone ? digits.includes(matchDigits) : lower.includes(r.match.toLowerCase())) {
-      return { name: r.name, inRoster: true };
+    for (const m of r.matches) {
+      const mDigits = m.replace(/\D/g, '');
+      const isPhone = mDigits.length >= 7 && !/[a-z@]/i.test(m);
+      // Compare the last 10 digits so "+1 (555) 123-4567" matches "5551234567".
+      const hit = isPhone ? digits.includes(mDigits.slice(-10)) : lower.includes(m.toLowerCase());
+      if (hit) return { name: r.name, inRoster: true };
     }
   }
   // Fallback: sender display name, e.g. "Jane Doe <jane@x.com>" -> "Jane Doe".

@@ -17,7 +17,7 @@ show the result. Every piece below is free:
 |---|---|---|
 | Inbox for tracking emails | Existing free Gmail account | Free |
 | Inbox for tracking texts (optional, US) | Google Voice number, set to forward texts to Gmail | Free |
-| Parser and database | Google Apps Script bound to a Google Sheet | Free (consumer quotas) |
+| Parser and database | Google Apps Script attached to the team's existing roster Google Sheet | Free (consumer quotas) |
 | Live list of rides | Apps Script web app (HTML page) | Free |
 | Private team page | Wix page, password-protected, with an Embed element | Included in Light |
 | Ride-start alerts | Slack Incoming Webhook to `#rides` | Free tier (uses 1 of 10 app slots) |
@@ -35,8 +35,8 @@ show the result. Every piece below is free:
                  Apps Script: find tracking links, identify the rider
                     │                    │                       │
                     ▼                    ▼                       ▼
-         Google Sheet "Rides"   Slack webhook → #rides   Web app (HTML list)
-         (source of truth)       "Alex started a ride"            │
+       Roster sheet: new        Slack webhook → #rides   Web app (HTML list)
+       "Rides" tab (log)         "Alex started a ride"            │
                                                                   ▼
                                     Wix password-protected page (Embed/iframe)
 ```
@@ -73,25 +73,55 @@ Only needed for devices that can text but not email.
 1. Sign up for a free Google Voice number with the team Gmail account (US only).
 2. Voice settings → Messages → **Forward messages to email** = ON.
 3. Riders text their link to that number. The forwarded email contains the
-   link and the sender's phone number. Put phone numbers in the Roster tab so texts
-   show the right name.
+   link and the sender's phone number. If the team roster has a phone column, texts
+   automatically show the right name.
 4. Caveat: Google Voice often **does not receive texts from short codes** (5–6 digit
    senders). Texts sent from a rider's own phone work fine. Prefer email when you can.
 
-### 3. Google Sheet + Apps Script
+### 3. Apps Script on the existing team roster
 
-1. While logged into the team Gmail, create a Google Sheet named **Ride Tracker**.
-2. Extensions → Apps Script. Replace `Code.gs` with `apps-script/Code.gs` from this
+The script reuses the team's existing roster spreadsheet. It reads riders straight from
+the roster tab without changing it, and adds one new tab, **Rides**, to log ride links.
+
+**Option A (simplest): the team Gmail owns the roster, or can edit it.**
+
+1. Open the roster in Google Sheets while logged into the team Gmail.
+   If it's an Excel file, upload it to Drive and use File → Save as Google Sheets.
+2. Go to Extensions → Apps Script. Replace `Code.gs` with `apps-script/Code.gs` from this
    repo. Add an HTML file named `Page` with the contents of `apps-script/Page.html`.
-3. Run the `setup` function once and accept the permission prompts (Gmail, Sheets,
+
+**Option B: the roster belongs to someone else and you'd rather not touch it.**
+
+1. Share the roster with the team Gmail (*Viewer* is enough).
+2. While logged into the team Gmail, create a small new sheet named **Ride Tracker** and add the script there
+   as in Option A.
+3. In `Code.gs`, set `ROSTER_SPREADSHEET_ID` to the roster's ID. That's the long string
+   in its URL between `/d/` and `/edit`.
+
+**Both options:**
+
+1. In `Code.gs`, check `ROSTER_TAB` and `ROSTER_COLUMNS`:
+   - Leave `ROSTER_TAB` blank to use the first tab, or type the tab's name.
+   - The script finds columns by their header text in row 1, ignoring case. It
+     recognises common headers such as *Name*, *First Name*/*Last Name*, *Nickname*,
+     *Email*, *Phone*/*Mobile*/*Cell*. If your headers differ, add them to the lists.
+   - Riders are recognised by name, email, or phone number (the phone number is used for texts). Cells holding
+     several emails or numbers separated by commas work fine.
+   - Optional: add a **Tracking Name** column for anyone whose GPS app shows a different
+     name than the roster does (e.g. roster "Robert Smith", Garmin "Bob S").
+2. Run the `setup` function once and accept the permission prompts (Gmail, Sheets,
    external requests). It:
-   - creates the `Rides` and `Roster` tabs,
+   - adds the `Rides` tab,
    - generates a random `ACCESS_KEY`,
-   - installs a trigger that runs `checkMail` every minute.
-4. Fill in the **Roster** tab. Each row has a *match text*, which is any text that identifies
-   the rider in their email, such as their name as Garmin writes it, their own email, or their phone number. The second column is the *display name*.
-5. Optional Slack setup: Project Settings → Script Properties → add `SLACK_WEBHOOK_URL`
+   - installs a trigger that runs `checkMail` every minute,
+   - runs `checkRoster`, which logs which columns it found and the first few riders.
+     Check that log (View → Executions) before going further.
+3. Optional Slack setup: Project Settings → Script Properties → add `SLACK_WEBHOOK_URL`
    (see step 5).
+
+> **Privacy:** in Option A, anyone who can open the roster can also see the Rides tab.
+> That's normally fine, since it's the same team, and rows are purged after 7 days. Use Option B if
+> the roster is shared more widely, e.g. with a sponsor or a race organiser.
 
 ### 4. Publish the list page
 
@@ -151,7 +181,7 @@ Link formats differ by brand. `Code.gs` has a `PROVIDERS` list of URL patterns:
 | Strava Beacon | `strava.com/beacon/...` | Medium. Verify. |
 | Wahoo | `*.wahoofitness.com/...live...` | Low. Verify. |
 | Hammerhead Karoo | `*.hammerhead.io/...` | Low. Verify. |
-| Fallback | any link in an email from a Roster rider | Off by default |
+| Fallback | any link in an email from a rider on the roster | Off by default |
 
 Have one rider of each brand send a test. If a link isn't picked up, open the email,
 copy the tracking URL's domain, and add or adjust a pattern in `PROVIDERS`. Also check

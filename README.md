@@ -2,8 +2,8 @@
 
 A free, private "who's out riding right now" page for the team.
 
-GPS units email their live-tracking link to the team Gmail. A Google Apps Script collects
-the links into a Google Sheet, posts a heads-up to Slack, and serves a live list that is
+GPS units email their live-tracking link to the team Gmail. A Google Apps Script matches
+each email to a rider on the existing team roster sheet, logs the link in a Rides tab, posts a heads-up to Slack, and serves a live list that is
 embedded on a password-protected Wix page.
 
 - **[PLAN.md](PLAN.md)**: architecture, step-by-step setup, limits, and things to verify
