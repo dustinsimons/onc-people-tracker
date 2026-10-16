@@ -171,7 +171,7 @@ function processMessage_(msg, sheet, roster) {
   endRides_(sheet, (row) => row[COL.RIDER] === rider.name);
 
   sheet.appendRow([msg.getDate(), rider.name, link.provider, link.url, source, msg.getId(), '']);
-  notifySlack_(rider.name, link);
+  notifyChat_(rider.name, link);
 }
 
 function findLink_(text) {
@@ -289,18 +289,34 @@ function purgeOldRows_(sheet) {
   }
 }
 
-function notifySlack_(rider, link) {
-  const url = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
-  if (!url) return;
+/** Posts a new ride to Slack and/or Discord, whichever webhook script properties are set. */
+function notifyChat_(rider, link) {
+  const props = PropertiesService.getScriptProperties();
+  const slack = props.getProperty('SLACK_WEBHOOK_URL');
+  const discord = props.getProperty('DISCORD_WEBHOOK_URL');
+  if (slack) {
+    postJson_(slack, { text: `:bicyclist: *${rider}* started a ride (${link.provider}): <${link.url}|live tracking>` });
+  }
+  if (discord) {
+    postJson_(discord, {
+      username: 'Ride Tracker',
+      // <url> inside the masked link stops Discord adding a big preview card.
+      content: `🚴 **${rider}** started a ride (${link.provider}): [live tracking](<${link.url}>)`,
+      allowed_mentions: { parse: [] }, // never ping anyone, whatever the name contains
+    });
+  }
+}
+
+function postJson_(url, body) {
   try {
     UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
-      payload: JSON.stringify({ text: `:bicyclist: *${rider}* started a ride (${link.provider}): <${link.url}|live tracking>` }),
+      payload: JSON.stringify(body),
       muteHttpExceptions: true,
     });
   } catch (e) {
-    console.warn('Slack post failed: ' + e);
+    console.warn('Chat post failed: ' + e);
   }
 }
 

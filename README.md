@@ -9,3 +9,4 @@ embedded on a password-protected Wix page.
 - **[PLAN.md](PLAN.md)**: architecture, step-by-step setup, limits, and things to verify
 - **[apps-script/Code.gs](apps-script/Code.gs)**: the script (paste into the Sheet's Apps Script editor)
 - **[apps-script/Page.html](apps-script/Page.html)**: the list page served by the web app
+- **[docs/ride-tracker-setup-guide.md](docs/ride-tracker-setup-guide.md)**: standalone setup guide for another team (Discord or Slack)
