@@ -179,12 +179,16 @@ Link formats differ by brand. `Code.gs` has a `PROVIDERS` list of URL patterns:
 | Garmin LiveTrack | `livetrack.garmin.com/...` | High |
 | Garmin inReach MapShare | `share.garmin.com/...` | High |
 | Strava Beacon | `strava.com/beacon/...` | Medium. Verify. |
-| Wahoo | `*.wahoofitness.com/...live...` | Low. Verify. |
+| Wahoo | `wahooligan.com/users/live/...` | High. Verified from a real email. |
 | Hammerhead Karoo | `*.hammerhead.io/...` | Low. Verify. |
 | Fallback | any link in an email from a rider on the roster | Off by default |
 
 Have one rider of each brand send a test. If a link isn't picked up, open the email,
-copy the tracking URL's domain, and add or adjust a pattern in `PROVIDERS`. Also check
+copy the tracking URL's domain, and add or adjust a pattern in `PROVIDERS`. If the email
+comes from a no-reply address and names the rider in the body (Wahoo writes "Dustin S is
+starting an activity"), give the provider a `nameRe` so the right rider is shown. A short name
+like "Dustin S" is matched to the roster by first name + last initial; add a Tracking Name
+if two riders share both. Also check
 whether the provider sends an "ended" email. If so, add its wording to `END_PATTERNS`.
 
 ## Optional later improvements

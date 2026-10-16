@@ -41,11 +41,18 @@ const CONFIG = {
 };
 
 // URL patterns that identify live-tracking links. Verify with real emails (see PLAN.md).
+// Optional nameRe pulls the rider's name out of the email body (first capture group),
+// for providers that send from a no-reply address.
 const PROVIDERS = [
   { name: 'Garmin LiveTrack', re: /https?:\/\/livetrack\.garmin\.com\/[^\s"'<>)]+/i },
   { name: 'Garmin MapShare', re: /https?:\/\/share\.garmin\.com\/[^\s"'<>)]+/i },
   { name: 'Strava Beacon', re: /https?:\/\/(?:www\.)?strava\.com\/beacon\/[^\s"'<>)]+/i },
-  { name: 'Wahoo', re: /https?:\/\/[a-z0-9.-]*wahoofitness\.com\/[^\s"'<>)]*live[^\s"'<>)]*/i },
+  // Verified from a real email: "Dustin S is starting an activity and you can track their progress:"
+  {
+    name: 'Wahoo',
+    re: /https?:\/\/(?:www\.)?wahooligan\.com\/users\/live\/[^\s"'<>)]+/i,
+    nameRe: /^\s*(.+?) is starting an activity/im,
+  },
   { name: 'Hammerhead', re: /https?:\/\/[a-z0-9.-]*hammerhead\.io\/[^\s"'<>)]+/i },
 ];
 
@@ -139,8 +146,14 @@ function processMessage_(msg, sheet, roster) {
   const html = (msg.getBody() || '').replace(/&amp;/g, '&');
   const haystack = [from, subject, plain].join('\n');
 
-  const rider = findRider_(haystack, roster);
-  const link = findLink_(plain + '\n' + html, rider.inRoster);
+  const text = plain + '\n' + html;
+  let link = findLink_(text);
+  const namedInEmail = link && link.nameRe ? (plain.match(link.nameRe) || [])[1] : '';
+  const rider = findRider_(haystack, roster, namedInEmail);
+  if (!link && CONFIG.FALLBACK_ANY_LINK_FROM_ROSTER && rider.inRoster) {
+    const m = text.match(/https?:\/\/[^\s"'<>)]+/i);
+    if (m) link = { provider: 'Link', url: m[0] };
+  }
   const source = /voice\.google\.com/i.test(from) ? 'SMS (Google Voice)' : 'Email';
 
   if (END_PATTERNS.some((re) => re.test(subject) || re.test(plain))) {
@@ -156,14 +169,10 @@ function processMessage_(msg, sheet, roster) {
   notifySlack_(rider.name, link);
 }
 
-function findLink_(text, fromRosterRider) {
+function findLink_(text) {
   for (const p of PROVIDERS) {
     const m = text.match(p.re);
-    if (m) return { provider: p.name, url: m[0] };
-  }
-  if (CONFIG.FALLBACK_ANY_LINK_FROM_ROSTER && fromRosterRider) {
-    const m = text.match(/https?:\/\/[^\s"'<>)]+/i);
-    if (m) return { provider: 'Link', url: m[0] };
+    if (m) return { provider: p.name, url: m[0], nameRe: p.nameRe };
   }
   return null;
 }
@@ -200,13 +209,41 @@ function loadRoster_() {
   return rows
     .map((r) => {
       const full = get(r, 'name') || [get(r, 'first'), get(r, 'last')].filter(Boolean).join(' ');
-      const matches = [...list(r, 'tracking'), full, ...list(r, 'email'), ...list(r, 'phone')].filter(Boolean);
-      return { name: get(r, 'display') || full || matches[0], matches };
+      const names = [...list(r, 'tracking'), full].filter(Boolean);
+      const matches = [...names, ...list(r, 'email'), ...list(r, 'phone')];
+      return { name: get(r, 'display') || full || matches[0], names, matches };
     })
     .filter((p) => p.matches.length);
 }
 
-function findRider_(haystack, roster) {
+/**
+ * Matches a name taken from the email body ("Dustin S") to the roster: exact name or
+ * Tracking Name first, then first name + last initial if exactly one rider fits.
+ */
+function matchNamedRider_(named, roster) {
+  const norm = (s) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+  const target = norm(named);
+  const exact = roster.find((r) => r.names.some((n) => norm(n) === target));
+  if (exact) return exact;
+
+  const parts = target.split(' ');
+  if (parts.length < 2) return null;
+  const first = parts[0];
+  const lastInitial = parts[parts.length - 1][0];
+  const hits = roster.filter((r) =>
+    r.names.some((n) => {
+      const p = norm(n).split(' ');
+      return p.length >= 2 && p[0] === first && p[p.length - 1][0] === lastInitial;
+    })
+  );
+  return hits.length === 1 ? hits[0] : null;
+}
+
+function findRider_(haystack, roster, namedInEmail) {
+  if (namedInEmail) {
+    const r = matchNamedRider_(namedInEmail, roster);
+    return r ? { name: r.name, inRoster: true } : { name: namedInEmail.trim(), inRoster: false };
+  }
   const lower = haystack.toLowerCase();
   const digits = haystack.replace(/\D/g, '');
   for (const r of roster) {
