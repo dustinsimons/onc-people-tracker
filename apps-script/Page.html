@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; background: #fff; color: #1a1a1a; }
+      h1 { font-size: 1.3rem; margin: 0 0 4px; }
+      .meta { color: #666; font-size: 0.85rem; margin-bottom: 16px; }
+      .ride { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+              border: 1px solid #ddd; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+      .name { font-weight: 600; }
+      .sub { color: #666; font-size: 0.85rem; }
+      a.btn { background: #e4572e; color: #fff; text-decoration: none; padding: 8px 14px;
+              border-radius: 6px; white-space: nowrap; font-weight: 600; }
+      .empty { color: #666; padding: 24px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Live rides</h1>
+    <div class="meta" id="meta">Loading…</div>
+    <div id="list"></div>
+
+    <script>
+      const KEY = <?= key ?>;
+
+      function esc(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      function render(rides) {
+        const list = document.getElementById('list');
+        document.getElementById('meta').textContent = 'Updated ' + new Date().toLocaleTimeString() + ' · refreshes every minute';
+        if (!rides.length) {
+          list.innerHTML = '<div class="empty">Nobody is out riding right now.</div>';
+          return;
+        }
+        list.innerHTML = rides.map((r) => {
+          const started = new Date(r.startedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          return '<div class="ride"><div><div class="name">' + esc(r.rider) + '</div>' +
+            '<div class="sub">Started ' + esc(started) + ' · ' + esc(r.provider) + '</div></div>' +
+            '<a class="btn" target="_blank" rel="noopener" href="' + esc(r.link) + '">Live map</a></div>';
+        }).join('');
+      }
+
+      function load() {
+        google.script.run
+          .withSuccessHandler(render)
+          .withFailureHandler((e) => { document.getElementById('meta').textContent = 'Could not load: ' + e.message; })
+          .getActiveRides(KEY);
+      }
+
+      load();
+      setInterval(load, 60 * 1000);
+    </script>
+  </body>
+</html>
