@@ -180,7 +180,7 @@ Link formats differ by brand. `Code.gs` has a `PROVIDERS` list of URL patterns:
 | Garmin inReach MapShare | `share.garmin.com/...` | High |
 | Strava Beacon | `strava.com/beacon/...` | Medium. Verify. |
 | Wahoo | `wahooligan.com/users/live/...` | High. Verified from a real email. |
-| Hammerhead Karoo | `*.hammerhead.io/...` | Low. Verify. |
+| Hammerhead Karoo | `dashboard.hammerhead.io/live/...`, rider = Hammerhead username ("hall00jd is starting a ride"). Put the username in the rider's Tracking Name | High. Verified from a real email. |
 | Fallback | any link in an email from a rider on the roster | Off by default |
 
 Have one rider of each brand send a test. If a link isn't picked up, open the email,

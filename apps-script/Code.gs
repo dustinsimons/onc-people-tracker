@@ -58,7 +58,14 @@ const PROVIDERS = [
     re: /https?:\/\/(?:www\.)?wahooligan\.com\/users\/live\/[^\s"'<>)]+/i,
     nameRe: /^\s*(.+?) is starting an activity/im,
   },
-  { name: 'Hammerhead', re: /https?:\/\/[a-z0-9.-]*hammerhead\.io\/[^\s"'<>)]+/i },
+  // Verified from a real email: "hall00jd is starting a ride". That's the Hammerhead username,
+  // so put it in the rider's Tracking Name column. The plain-text part has the direct link;
+  // the HTML button goes through an SRAM click-tracking redirect.
+  {
+    name: 'Hammerhead',
+    re: /https?:\/\/dashboard\.hammerhead\.io\/live\/[^\s"'<>)]+/i,
+    nameRe: /^\s*(\S.*?) is starting a ride/im,
+  },
 ];
 
 // Subject/body wording that means a ride has ended (only if a provider sends such emails).

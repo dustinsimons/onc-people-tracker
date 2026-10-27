@@ -190,13 +190,15 @@ Send the team:
 | Wahoo | `wahooligan.com/users/live/…` | Body: "**Jane D** is starting an activity…" | ✅ Verified |
 | Garmin inReach MapShare | `share.garmin.com/…` | Roster name/email/phone found anywhere in the email | Untested |
 | Strava Beacon | `strava.com/beacon/…` | Roster name/email/phone found anywhere in the email | Untested |
-| Hammerhead | `*.hammerhead.io/…` | Roster name/email/phone found anywhere in the email | Untested |
+| Hammerhead | `dashboard.hammerhead.io/live/…` | Body: "**hall00jd** is starting a ride". This is the Hammerhead *username*, so put it in the rider's **Tracking Name** | ✅ Verified |
 
 - **Short names** like Wahoo's "Jane D" are matched to the roster by first name + last
   initial. If two riders share both, the name is shown exactly as written.
 - **Forwarded emails** are credited to the rider named in the email, not to the person who forwarded it.
 - **Different name in the GPS app:** if a rider's Garmin or Wahoo profile name doesn't match the roster, add a
-  **Tracking Name** column to the roster with the name the app uses.
+  **Tracking Name** column to the roster with the name the app uses. **Hammerhead always needs this**, because its
+  emails show the rider's username (e.g. `hall00jd`), not their real name. Until it's filled in, the ride shows
+  under the username. One cell can hold several names separated by commas, e.g. `Jordan H, hall00jd`.
 - **New brand:** if a brand's link isn't picked up, open the email in Gmail and choose **⋮ → Show original**.
   Find the tracking URL and add a pattern to `PROVIDERS` at the top of `Code.gs`.
 
